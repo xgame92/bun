@@ -8904,6 +8904,8 @@ declare module "bun" {
      *
      * Default flags: `--remote-debugging-pipe --headless --no-first-run
      * --no-default-browser-check --disable-gpu --user-data-dir=<temp>`.
+     * On Linux, when Bun runs as root, it also passes `--no-sandbox`:
+     * Chrome does not start as root with its sandbox enabled.
      */
     type Backend =
       | "webkit"

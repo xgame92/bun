@@ -74,6 +74,38 @@ test.concurrent("navigate, events and evaluate cross the pipes", async () => {
   });
 });
 
+test.concurrent("the browser is launched with the documented switches", async () => {
+  // The switches land in the fake's process.execArgv (bun accepts and ignores
+  // them); backend.argv, the fixture path here, comes after them and is the
+  // script. The list is the one docs/runtime/webview.mdx publishes. Chrome
+  // refuses to start with an effective uid of 0 unless its sandbox is off
+  // (crbug.com/638180), so on Linux the runtime adds --no-sandbox for root,
+  // and only for root.
+  const result = await runScenario(`
+    const view = newView();
+    await view.navigate("http://fake/");
+    print(await view.evaluate("process.execArgv"));
+    view.close();
+  `);
+  const rootOnLinux = process.platform === "linux" && process.geteuid?.() === 0;
+  expect(result).toEqual([
+    expect.stringMatching(/^--user-data-dir=.+/),
+    "--remote-debugging-pipe",
+    "--headless",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-gpu",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+    "--disable-ipc-flooding-protection",
+    "--no-startup-window",
+    ...(rootOnLinux ? ["--no-sandbox"] : []),
+  ]);
+});
+
 test.concurrent("a reply larger than the read buffer is reassembled", async () => {
   const result = await runScenario(`
     const view = newView();

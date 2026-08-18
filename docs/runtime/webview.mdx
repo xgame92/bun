@@ -159,6 +159,8 @@ When spawning, Bun passes a minimal flag set:
 --disable-ipc-flooding-protection --no-startup-window
 ```
 
+On Linux, when Bun runs as root (for example in a container), Bun also passes `--no-sandbox`. Chrome does not start as root with its sandbox enabled.
+
 Append your own with `argv` — Chrome resolves duplicate switches last-wins, so you can override any default:
 
 ```ts

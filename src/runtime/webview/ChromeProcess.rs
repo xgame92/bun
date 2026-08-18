@@ -542,6 +542,15 @@ fn spawn(
             // default about:blank. Saves one tab and the visual-complete wait.
             c"--no-startup-window".as_ptr(),
         ];
+        // Chrome's Linux zygote host exits at startup when the effective uid is
+        // 0 unless the sandbox is off (crbug.com/638180), so root (containers)
+        // has no sandboxed launch to lose. Done here rather than left to
+        // backend.argv because the stale-DevToolsActivePort fallback spawn in
+        // ChromeBackend.cpp passes no argv at all.
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        if bun_sys::c::geteuid() == 0 {
+            argv.push(c"--no-sandbox".as_ptr());
+        }
         // User extras last so they can override built-in flags (Chrome's
         // CommandLine last-wins for duplicate switches). Memory is the caller's
         // CString Vector — lives until Bun__Chrome__ensure returns, after which

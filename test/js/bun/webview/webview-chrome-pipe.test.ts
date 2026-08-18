@@ -74,36 +74,59 @@ test.concurrent("navigate, events and evaluate cross the pipes", async () => {
   });
 });
 
+// The switches the runtime launches the browser with. They land in the fake's
+// process.execArgv (bun accepts and ignores them); backend.argv, the fixture
+// path here, comes after them and is the script. The list is the one
+// docs/runtime/webview.mdx publishes. Chrome refuses to start with an
+// effective uid of 0 unless its sandbox is off (crbug.com/638180), and which
+// of Bun's uids Chrome ends up with depends on the launcher (a shell wrapper
+// like google-chrome resets the effective uid to the real one), so on Linux
+// the runtime adds --no-sandbox when either uid is 0, and only then.
+const launchSwitches = (userDataDir: unknown, noSandbox: boolean) => [
+  userDataDir,
+  "--remote-debugging-pipe",
+  "--headless",
+  "--no-first-run",
+  "--no-default-browser-check",
+  "--disable-gpu",
+  "--disable-extensions",
+  "--disable-background-networking",
+  "--disable-background-timer-throttling",
+  "--disable-backgrounding-occluded-windows",
+  "--disable-renderer-backgrounding",
+  "--disable-ipc-flooding-protection",
+  "--no-startup-window",
+  "--disable-dev-shm-usage",
+  ...(noSandbox ? ["--no-sandbox"] : []),
+];
+const isLinux = process.platform === "linux";
+const realRoot = isLinux && process.getuid!() === 0;
+
 test.concurrent("the browser is launched with the documented switches", async () => {
-  // The switches land in the fake's process.execArgv (bun accepts and ignores
-  // them); backend.argv, the fixture path here, comes after them and is the
-  // script. The list is the one docs/runtime/webview.mdx publishes. Chrome
-  // refuses to start with an effective uid of 0 unless its sandbox is off
-  // (crbug.com/638180), so on Linux the runtime adds --no-sandbox for root,
-  // and only for root.
   const result = await runScenario(`
     const view = newView();
     await view.navigate("http://fake/");
     print(await view.evaluate("process.execArgv"));
     view.close();
   `);
-  const rootOnLinux = process.platform === "linux" && process.geteuid?.() === 0;
-  expect(result).toEqual([
-    expect.stringMatching(/^--user-data-dir=.+/),
-    "--remote-debugging-pipe",
-    "--headless",
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--disable-gpu",
-    "--disable-extensions",
-    "--disable-background-networking",
-    "--disable-background-timer-throttling",
-    "--disable-backgrounding-occluded-windows",
-    "--disable-renderer-backgrounding",
-    "--disable-ipc-flooding-protection",
-    "--no-startup-window",
-    ...(rootOnLinux ? ["--no-sandbox"] : []),
-  ]);
+  const rootOnLinux = isLinux && (process.getuid!() === 0 || process.geteuid!() === 0);
+  expect(result).toEqual(launchSwitches(expect.stringMatching(/^--user-data-dir=.+/), rootOnLinux));
+});
+
+// Pins the real-uid half of the rule: after seteuid() this process is root by
+// its real uid only, which is what a wrapper-launched Chrome would run as.
+// dataStore.directory is used as the profile directory as given, so nothing
+// has to be created in a temp directory the dropped uid may not be able to
+// write to; the fake never touches it.
+(realRoot ? test.concurrent : test.skip)("--no-sandbox is still passed once only the real uid is root", async () => {
+  const result = await runScenario(`
+    process.seteuid(65534);
+    const view = new Bun.WebView({ backend, width: 100, height: 100, dataStore: { directory: "/profile-dir" } });
+    await view.navigate("http://fake/");
+    print({ euid: process.geteuid(), execArgv: await view.evaluate("process.execArgv") });
+    view.close();
+  `);
+  expect(result).toEqual({ euid: 65534, execArgv: launchSwitches("--user-data-dir=/profile-dir", true) });
 });
 
 test.concurrent("a reply larger than the read buffer is reassembled", async () => {

@@ -541,11 +541,16 @@ fn spawn(
             // No startup window — targets are Target.createTarget'd, not the
             // default about:blank. Saves one tab and the visual-complete wait.
             c"--no-startup-window".as_ptr(),
+            // Shared memory files in the temp dir instead of /dev/shm, which Docker
+            // caps at 64MB (a third 1280x720 tab kills Chrome). Playwright and
+            // puppeteer both ship this.
+            c"--disable-dev-shm-usage".as_ptr(),
         ];
-        // Chrome exits at startup when its effective uid is 0 unless the
-        // sandbox is off (crbug.com/638180).
+        // Chrome exits at startup when its euid is 0 unless the sandbox is off
+        // (crbug.com/638180). Both of our uids matter: a bare binary inherits
+        // our euid, the google-chrome bash wrapper resets euid to the real uid.
         #[cfg(any(target_os = "linux", target_os = "android"))]
-        if bun_sys::c::geteuid() == 0 {
+        if bun_sys::c::getuid() == 0 || bun_sys::c::geteuid() == 0 {
             argv.push(c"--no-sandbox".as_ptr());
         }
         // User extras last so they can override built-in flags (Chrome's

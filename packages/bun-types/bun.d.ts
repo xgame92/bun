@@ -8902,10 +8902,15 @@ declare module "bun" {
      * call's `path`/`argv`/`dataStore.directory` win; subsequent views reuse
      * the same Chrome instance via `Target.createTarget`.
      *
-     * Default flags: `--remote-debugging-pipe --headless --no-first-run
-     * --no-default-browser-check --disable-gpu --user-data-dir=<temp>`.
-     * On Linux, when Bun runs as root, it also passes `--no-sandbox`:
-     * Chrome does not start as root with its sandbox enabled.
+     * Default flags: `--user-data-dir=<temp> --remote-debugging-pipe
+     * --headless --no-first-run --no-default-browser-check --disable-gpu
+     * --disable-extensions --disable-background-networking
+     * --disable-background-timer-throttling
+     * --disable-backgrounding-occluded-windows --disable-renderer-backgrounding
+     * --disable-ipc-flooding-protection --no-startup-window
+     * --disable-dev-shm-usage`. On Linux, when Bun's real or effective user
+     * ID is 0, it also passes `--no-sandbox`: Chrome does not start as root
+     * with its sandbox enabled.
      */
     type Backend =
       | "webkit"
